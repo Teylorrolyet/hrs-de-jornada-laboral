@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PORTAL BOSQUE HORARIOS DE JORNADAS</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22c55e">
+<style>
+:root{--bg:#020617;--card:#0f172a;--accent:#22c55e;--text:#e2e8f0;--danger:#ef4444}
+body{margin:0;font-family:'Poppins',system-ui;background:var(--bg);color:var(--text)}
+.container{max-width:520px;margin:auto;padding:16px;padding-bottom:100px}
+.header{text-align:center;font-size:22px;font-weight:800;margin-bottom:4px}
+.sub{text-align:center;font-size:14px;color:#94a3b8;margin-bottom:12px}
+.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{padding:12px;border-radius:12px;background:var(--card);text-align:center;cursor:pointer;font-weight:600}
+.day.active{outline:2px solid white}
+.day.weekend{background:#ef4444;color:#fff}
+.card{background:var(--card);padding:16px;border-radius:16px;margin-top:12px}
+input,button{width:100%;padding:10px;margin-top:8px;border-radius:12px;border:none;font-family:'Poppins'}
+input{background:#020617;color:white}
+button{background:var(--accent);font-weight:700}
+button.del{background:var(--danger)}
+.big{text-align:center;font-size:24px;font-weight:800;color:var(--accent)}
+.money{text-align:center;font-size:20px;font-weight:700;color:#38bdf8;margin-top:6px}
+.navMonth{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.navMonth button{width:auto;padding:6px 12px}
+.monthName{font-weight:700;font-size:16px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">PORTAL BOSQUE</div>
+<div class="sub">HORARIOS DE JORNADAS</div>
+
+<div class="card">
+<input id="emp" placeholder="Nombre del empleado">
+</div>
+
+<div class="navMonth">
+<button onclick="prevMonth()">◀</button>
+<div id="monthLabel" class="monthName"></div>
+<button onclick="nextMonth()">▶</button>
+</div>
+
+<div id="calendar" class="calendar"></div>
+
+<div class="card">
+<div class="big">Horas: <span id="total">0</span> h</div>
+<div class="money">💰 $ <span id="money">0</span></div>
+</div>
+
+<div class="card">
+<input id="date" type="date">
+<input id="start" value="07:00">
+<input id="end" value="14:00">
+<button onclick="save()">Guardar</button>
+</div>
+
+<div class="card">
+<b>Día seleccionado</b>
+<div id="dayData"></div>
+</div>
+
+<div class="card">
+<button onclick="share()">Compartir WhatsApp</button>
+</div>
+
+</div>
+
+<script>
+const RATE = 400; // pesos por hora
+
+let current=new Date();
+let selectedDate=new Date().toISOString().slice(0,10);
+
+const dateInput=document.getElementById('date');
+const empInput=document.getElementById('emp');
+
+dateInput.value=selectedDate;
+empInput.value=localStorage.getItem('emp')||'';
+
+const months=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+function get(){try{return JSON.parse(localStorage.getItem('cal'))||{}}catch{return {}}}
+function set(d){localStorage.setItem('cal',JSON.stringify(d))}
+function min(t){let[h,m]=t.split(':');return(+h*60)+(+m)}
+function calc(a,b){let t=b-a;if(t<0)t+=1440;return(t/60)}
+function monthKey(){return current.toISOString().slice(0,7)}
+
+function buildCalendar(){
+ let cal=document.getElementById('calendar');
+ cal.innerHTML='';
+ let y=current.getFullYear();
+ let mo=current.getMonth();
+ let days=new Date(y,mo+1,0).getDate();
+
+ document.getElementById('monthLabel').innerText=`${months[mo]} ${y}`;
+
+ for(let i=1;i<=days;i++){
+  let d=`${y}-${String(mo+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+  let el=document.createElement('div');
+
+  let dateObj=new Date(d+'T00:00:00');
+  let dayWeek=dateObj.getUTCDay();
+
+  el.className='day';
+  if(dayWeek===0 || dayWeek===6) el.classList.add('weekend');
+
+  // marcar días trabajados en verde
+  let data=get();
+  let dayData=(data[monthKey()]||[]).find(x=>x.date===d);
+  if(dayData){
+    el.style.background='#22c55e';
+    el.style.color='#000';
+  }
+
+  if(d===selectedDate) el.classList.add('active');
+
+  el.innerText=i;
+  el.onclick=()=>{selectedDate=d;dateInput.value=d;render();buildCalendar();};
+  cal.appendChild(el);
+ }
+}
+
+function save(){
+ let d=get();
+ let mo=monthKey();
+ if(!d[mo])d[mo]=[];
+ let h=calc(min(start.value),min(end.value));
+
+ let existing=d[mo].find(x=>x.date===dateInput.value);
+ if(existing){existing.start=start.value;existing.end=end.value;existing.h=h}
+ else d[mo].push({date:dateInput.value,start:start.value,end:end.value,h});
+
+ localStorage.setItem('emp',empInput.value);
+ set(d);render();
+}
+
+function del(){
+ let d=get();
+ let mo=monthKey();
+ d[mo]=d[mo].filter(x=>x.date!==selectedDate);
+ if(d[mo].length===0)delete d[mo];
+ set(d);render();
+}
+
+function render(){
+ let d=get();
+ let mo=monthKey();
+ let arr=d[mo]||[];
+ let total=0;
+ arr.forEach(x=>total+=+x.h);
+
+ document.getElementById('total').innerText=total.toFixed(2);
+ document.getElementById('money').innerText=(total*RATE).toFixed(0);
+
+ let day=arr.find(x=>x.date===selectedDate);
+ if(day){
+ let pay=(day.h*RATE).toFixed(0);
+ document.getElementById('dayData').innerHTML=`${day.date}<br>${day.start}-${day.end}<br>${day.h.toFixed(2)}h<br>💰 $${pay}
+ <button class='del' onclick='del()'>Eliminar</button>`;
+ }else document.getElementById('dayData').innerHTML='Sin registro';
+}
+
+function prevMonth(){current.setMonth(current.getMonth()-1);buildCalendar();render()}
+function nextMonth(){current.setMonth(current.getMonth()+1);buildCalendar();render()}
+
+function share(){
+ let d=get();
+ let mo=monthKey();
+ let arr=d[mo]||[];
+ let name=localStorage.getItem('emp')||'Empleado';
+ let txt=`${name}\n${months[current.getMonth()]} ${current.getFullYear()}\n`;
+ let total=0;
+ arr.forEach(x=>{total+=+x.h;txt+=`${x.date} ${x.h.toFixed(2)}h $${(x.h*RATE).toFixed(0)}\n`});
+ txt+=`Total ${total.toFixed(2)}h = $${(total*RATE).toFixed(0)}`;
+ window.open('https://wa.me/?text='+encodeURIComponent(txt));
+}
+
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+
+buildCalendar();render();
+</script>
+</body>
+</html>
